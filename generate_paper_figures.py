@@ -1,7 +1,7 @@
 import csv
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
 
@@ -78,11 +78,11 @@ def parse_comparison_file(path: Path) -> List[Dict[str, object]]:
 
 def collect_comparisons() -> List[Dict[str, object]]:
     comparison_files = sorted(OUTPUTS_DIR.glob("comparison*.txt")) + sorted((OUTPUTS_DIR / "logs").glob("comparison*.txt"))
-    seen: set[Tuple[str, str]] = set()
+    seen: set[str] = set()
     rows: List[Dict[str, object]] = []
     for path in comparison_files:
         for row in parse_comparison_file(path):
-            key = (str(row["run_name"]), str(row["source_file"]))
+            key = str(row["run_name"])
             if key not in seen:
                 seen.add(key)
                 rows.append(row)

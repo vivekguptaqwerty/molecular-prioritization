@@ -12,6 +12,9 @@ env/
 ENV/
 python_deps/
 
+# Locally downloaded external tool binaries (e.g. AutoDock Vina)
+bin/
+
 # Local configuration and secrets
 .env
 .env.*

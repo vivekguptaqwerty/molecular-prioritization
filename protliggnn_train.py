@@ -228,13 +228,20 @@ def select_ligand_file(complex_dir: Path, pdb_id: str) -> Optional[Path]:
     return None
 
 
-def discover_complex_records(data_dir: Path, max_samples: Optional[int]) -> List[ComplexRecord]:
+def discover_complex_records(
+    data_dir: Path,
+    max_samples: Optional[int],
+    exclude_ids: Optional[set] = None,
+) -> List[ComplexRecord]:
     affinities = load_affinity_index(data_dir / "index")
     complex_dirs = find_complex_directories(data_dir)
+    exclude_ids = exclude_ids or set()
 
     records: List[ComplexRecord] = []
     for pdb_id in sorted(complex_dirs):
         if pdb_id not in affinities:
+            continue
+        if pdb_id.lower() in exclude_ids:
             continue
         complex_dir = complex_dirs[pdb_id]
         protein_path = complex_dir / f"{pdb_id}_protein.pdb"
@@ -878,6 +885,12 @@ def parse_args():
     parser.add_argument("--run_name", type=str, default="protliggnn_run")
     parser.add_argument("--no_crossgraph", action="store_true")
     parser.add_argument("--save_path", type=str, default="outputs/best_protliggnn.pt")
+    parser.add_argument(
+        "--exclude_ids_file",
+        type=str,
+        default=None,
+        help="Path to a text file of PDB IDs (one per line) to exclude from training, e.g. an external benchmark core set.",
+    )
     return parser.parse_args()
 
 
@@ -889,8 +902,14 @@ def main():
     output_dir = Path("outputs")
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    exclude_ids = None
+    if args.exclude_ids_file:
+        exclude_path = Path(args.exclude_ids_file)
+        exclude_ids = {line.strip().lower() for line in exclude_path.read_text().splitlines() if line.strip()}
+        print(f"Excluding {len(exclude_ids)} PDB IDs listed in {exclude_path.resolve()}")
+
     print(f"Loading dataset from {data_dir.resolve()}")
-    records = discover_complex_records(data_dir, args.max_samples)
+    records = discover_complex_records(data_dir, args.max_samples, exclude_ids=exclude_ids)
     print(f"Found {len(records)} candidate complexes with labels and matching files before validation.")
     if not records:
         raise RuntimeError("No candidate complexes were found. Check --data_dir and index files.")

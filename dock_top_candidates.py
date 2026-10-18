@@ -326,7 +326,7 @@ def main():
         "vina",
         [Path("C:/Program Files (x86)/The Scripps Research Institute/Vina/vina.exe")],
     )
-    require_tool(obabel_command, "Open Babel")
+    require_tool(obabel_command, "Open Babel", version_flag="-V")
     require_tool(vina_command, "AutoDock Vina")
 
     known_rows, known_failures = validate_known_top10(obabel_command, vina_command)

@@ -48,13 +48,13 @@ def resolve_tool(tool_name: str, fallback_paths: Sequence[Path]) -> str:
     raise FileNotFoundError(f"{tool_name} was not found on PATH or known Windows install locations.")
 
 
-def require_tool(tool_command: str, display_name: str):
+def require_tool(tool_command: str, display_name: str, version_flag: str = "--version"):
     try:
-        result = run_command([tool_command, "--version"], timeout=20)
+        result = run_command([tool_command, version_flag], timeout=20)
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"{display_name} was not found.") from exc
     except subprocess.TimeoutExpired as exc:
-        raise TimeoutError(f"{display_name} did not respond to --version within the timeout.") from exc
+        raise TimeoutError(f"{display_name} did not respond to {version_flag} within the timeout.") from exc
 
     if result.returncode != 0:
         message = (result.stderr or result.stdout).strip()
@@ -172,8 +172,6 @@ def run_vina(
         f"{box['size_z']:.3f}",
         "--out",
         str(pose_path),
-        "--log",
-        str(log_path),
     ]
     result = run_command(command, timeout=600)
     log_text = "\n".join(part for part in [result.stdout, result.stderr] if part)
@@ -215,10 +213,34 @@ def run_protliggnn_affinity(protein_pdb: Path, ligand_sdf: Path, checkpoint: Pat
         return float(model(ligand_batch, protein_batch).item())
 
 
+PDBQT_ALLOWED_PREFIXES = (
+    "ROOT",
+    "ENDROOT",
+    "BRANCH",
+    "ENDBRANCH",
+    "TORSDOF",
+    "ATOM",
+    "HETATM",
+    "REMARK",
+    "TER",
+    "MODEL",
+    "ENDMDL",
+)
+
+
+def strip_non_pdbqt_records(pdbqt_path: Path):
+    # Open Babel carries PDB metadata (HEADER/COMPND/SEQRES/...) into the PDBQT
+    # output; modern Vina's stricter parser rejects those unknown record types.
+    lines = pdbqt_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    kept = [line for line in lines if line.startswith(PDBQT_ALLOWED_PREFIXES)]
+    pdbqt_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+
+
 def prepare_receptor(obabel_command: str, protein_pdb: Path, out_dir: Path) -> Path:
     receptor_pdbqt = out_dir / f"{protein_pdb.stem}_receptor.pdbqt"
     if not receptor_pdbqt.exists() or receptor_pdbqt.stat().st_size == 0:
         convert_with_obabel(obabel_command, protein_pdb, receptor_pdbqt, extra_args=["-xr"])
+        strip_non_pdbqt_records(receptor_pdbqt)
     return receptor_pdbqt
 
 
@@ -550,7 +572,7 @@ def main():
         "vina",
         [Path("C:/Program Files (x86)/The Scripps Research Institute/Vina/vina.exe")],
     )
-    require_tool(obabel_command, "Open Babel")
+    require_tool(obabel_command, "Open Babel", version_flag="-V")
     require_tool(vina_command, "AutoDock Vina")
 
     receptor_pdbqt = prepare_receptor(obabel_command, protein_pdb, out_dir)
